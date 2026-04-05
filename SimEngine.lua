@@ -162,11 +162,32 @@ function TWS:RollYellowResult(snapshot, hand)
     return RESULT_HIT
 end
 
-function TWS:GetWeaponAverage(snapshot, hand)
+function TWS:GetWeaponAPContribution(snapshot, hand, bonusAP)
+    local ap = (snapshot and snapshot.stats and snapshot.stats.attackPower or 0) + (bonusAP or 0)
+    local speed = 0
+
     if hand == "oh" then
-        return Avg(snapshot.weapons.oh.min, snapshot.weapons.oh.max)
+        speed = snapshot and snapshot.weapons and snapshot.weapons.oh and snapshot.weapons.oh.speed or 0
+    else
+        speed = snapshot and snapshot.weapons and snapshot.weapons.mh and snapshot.weapons.mh.speed or 0
     end
-    return Avg(snapshot.weapons.mh.min, snapshot.weapons.mh.max)
+
+    return (ap / 14) * speed
+end
+
+function TWS:GetWeaponAverage(snapshot, hand, bonusAP)
+    local weapon
+    if hand == "oh" then
+        weapon = snapshot and snapshot.weapons and snapshot.weapons.oh or nil
+    else
+        weapon = snapshot and snapshot.weapons and snapshot.weapons.mh or nil
+    end
+
+    if not weapon then return 0 end
+
+    local baseMin = weapon.baseMin or weapon.min or 0
+    local baseMax = weapon.baseMax or weapon.max or 0
+    return Avg(baseMin, baseMax) + self:GetWeaponAPContribution(snapshot, hand, bonusAP)
 end
 
 function TWS:GetArmorAdjustedDamage(snapshot, rawDamage)
@@ -286,6 +307,51 @@ end
 function TWS:AddBreakdown(state, key, amount)
     if not amount or amount <= 0 then return end
     state.breakdown[key] = (state.breakdown[key] or 0) + amount
+end
+
+function TWS:IsWindfuryEnabled(snapshot)
+    return snapshot and snapshot.stats and (snapshot.stats.windfury == 1 or snapshot.stats.windfury == true) and 1 or nil
+end
+
+function TWS:GetWindfuryBonusRawDamage(snapshot)
+    local bonusAP = snapshot and snapshot.stats and snapshot.stats.windfuryBonusAP or 0
+    local speed = snapshot and snapshot.weapons and snapshot.weapons.mh and snapshot.weapons.mh.speed or 0
+    return (bonusAP / 14) * speed
+end
+
+function TWS:GetWindfuryAttackDamage(snapshot, result)
+    local raw = self:GetWeaponAverage(snapshot, "mh") + self:GetWindfuryBonusRawDamage(snapshot)
+
+    if result == RESULT_GLANCE then
+        raw = raw * self:GetGlanceMultiplier(snapshot, "mh")
+    elseif result == RESULT_CRIT then
+        raw = raw * 2
+    end
+
+    return self:GetArmorAdjustedDamage(snapshot, raw)
+end
+
+function TWS:TryWindfuryProc(snapshot, state)
+    if self:IsWindfuryEnabled(snapshot) ~= 1 then return 0 end
+    if not RollChance(snapshot.stats.windfuryChance or 0) then return 0 end
+
+    local result = self:RollWhiteResult(snapshot, "mh", 0)
+    local dmg = 0
+
+    if result ~= RESULT_MISS and result ~= RESULT_DODGE then
+        dmg = self:GetWindfuryAttackDamage(snapshot, result)
+        self:AddRageFromWhite(state, snapshot, "mh", dmg, result)
+        if result == RESULT_CRIT then
+            self:ApplyFlurryOnCrit(state, snapshot)
+        end
+        self:AddBreakdown(state, "windfury", dmg)
+        dmg = dmg + self:ApplySweepingStrikeCopy(snapshot, state, dmg, 0, 1)
+    else
+        self:AddRageFromWhite(state, snapshot, "mh", 0, result)
+    end
+
+    self:ConsumeSwingCharge(state)
+    return dmg
 end
 
 function TWS:GetExecuteStartTime(state, snapshot)
@@ -437,7 +503,8 @@ function TWS:CastMortalStrike(snapshot, state)
 
     self:AddBreakdown(state, "mortalstrike", dmg)
     local ss = self:ApplySweepingStrikeCopy(snapshot, state, dmg, 0, 1)
-    return dmg + ss, result
+    local wf = self:TryWindfuryProc(snapshot, state)
+    return dmg + ss + wf, result
 end
 
 function TWS:CastSweepingStrikes(snapshot, state)
@@ -610,7 +677,8 @@ function TWS:FinishSlamCast(snapshot, state)
 
     self:AddBreakdown(state, "slam", dmg)
     local ss = self:ApplySweepingStrikeCopy(snapshot, state, dmg, 0, 1)
-    return dmg + ss, result
+    local wf = self:TryWindfuryProc(snapshot, state)
+    return dmg + ss + wf, result
 end
 
 function TWS:ResolveQueuedMainhand(snapshot, state)
@@ -635,7 +703,8 @@ function TWS:ResolveQueuedMainhand(snapshot, state)
             end
             self:AddBreakdown(state, "heroicstrike", dmg)
             local ss = self:ApplySweepingStrikeCopy(snapshot, state, dmg, 0, 1)
-            return dmg + ss, result
+            local wf = self:TryWindfuryProc(snapshot, state)
+            return dmg + ss + wf, result
         end
     elseif queued == "cleave" then
         local cost = 20
@@ -647,6 +716,7 @@ function TWS:ResolveQueuedMainhand(snapshot, state)
             if targets < 1 then targets = 1 end
 
             local total = 0
+            local procWindfury = nil
             local k
             for k = 1, targets do
                 local result = self:RollYellowResult(snapshot, "mh")
@@ -658,6 +728,9 @@ function TWS:ResolveQueuedMainhand(snapshot, state)
                         self:ApplyFlurryOnCrit(state, snapshot)
                     end
                     total = total + dmg
+                    if k == 1 then
+                        procWindfury = 1
+                    end
                 else
                     if k == 1 then
                         state.rage = state.rage + (cost * 0.8)
@@ -666,6 +739,9 @@ function TWS:ResolveQueuedMainhand(snapshot, state)
             end
 
             self:AddBreakdown(state, "cleave", total)
+            if procWindfury == 1 then
+                total = total + self:TryWindfuryProc(snapshot, state)
+            end
             return total, RESULT_HIT
         end
     end
@@ -685,6 +761,7 @@ function TWS:ResolveMainhandWhite(snapshot, state)
         end
         self:AddBreakdown(state, "white", dmg)
         dmg = dmg + self:ApplySweepingStrikeCopy(snapshot, state, dmg, 0, 1)
+        dmg = dmg + self:TryWindfuryProc(snapshot, state)
     else
         self:AddRageFromWhite(state, snapshot, "mh", 0, result)
     end
@@ -793,6 +870,7 @@ function TWS:RunOneIteration(snapshot)
             slam = 0,
             heroicstrike = 0,
             cleave = 0,
+            windfury = 0,
         },
     }
 
@@ -886,6 +964,7 @@ function TWS:RunSimulation(snapshot)
         slam = 0,
         heroicstrike = 0,
         cleave = 0,
+        windfury = 0,
         duration = 0,
     }
 
@@ -912,7 +991,7 @@ function TWS:RunSimulation(snapshot)
     if self:CanUseSweepingStrikes(snapshot) ~= 1 then totals.sweepingstrikes = 0 end
 
     local whiteDPS = totals.white / avgDuration / sims
-    local abilityDPS = (totals.bloodthirst + totals.mortalstrike + totals.sweepingstrikes + totals.whirlwind + totals.execute + totals.slam + totals.heroicstrike + totals.cleave) / avgDuration / sims
+    local abilityDPS = (totals.bloodthirst + totals.mortalstrike + totals.sweepingstrikes + totals.whirlwind + totals.execute + totals.slam + totals.heroicstrike + totals.cleave + totals.windfury) / avgDuration / sims
 
     return {
         sims = sims,
@@ -932,6 +1011,7 @@ function TWS:RunSimulation(snapshot)
             slam = totals.slam / avgDuration / sims,
             heroicstrike = totals.heroicstrike / avgDuration / sims,
             cleave = totals.cleave / avgDuration / sims,
+            windfury = totals.windfury / avgDuration / sims,
         },
         note = "Engine pass v0.8: Ability toggles now resolve from both snapshot config and live UI button state, so BT/MS/SS/WW/Execute/HS/Cleave/Slam no longer silently fail from stale toggle values; Mortal Strike remains 130% weapon damage and Slam remains haste-scaled/no-clip, with Improved Slam using live Turtle's 0.25s-per-rank reduction.",
     }
