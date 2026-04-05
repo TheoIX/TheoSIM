@@ -11,3 +11,4 @@ Snapshot.lua
 SimEngine.lua
 UI.lua
 PaperDollButton.lua
+TheoSIM_BagScan.lua
