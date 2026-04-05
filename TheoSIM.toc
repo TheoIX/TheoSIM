@@ -1,0 +1,13 @@
+## Interface: 11200
+## Title: TheoSIM
+## Notes: In-game Warrior sim shell for Turtle WoW
+## Author: Theo
+## Version: 0.2.1
+## SavedVariables: TheoSIMDB
+
+Settings.lua
+Core.lua
+Snapshot.lua
+SimEngine.lua
+UI.lua
+PaperDollButton.lua
