@@ -1,17 +1,50 @@
-TurtleWarriorSim - scaffold build v0.1.3
+# TheoSIM
 
-Install:
-1. Put the TurtleWarriorSim folder into your Interface\AddOns\ directory.
-2. Reload the game UI.
-3. Use /twsim or the SIM button on the character sheet.
+A lightweight in-game damage simulator for **Turtle WoW Warriors**.
 
-Changes in v0.1.3:
-- Better MH/OH detection and name fallback
-- Live MH/OH min-max damage captured from character
-- Talent point split displayed
-- Results panel now shows captured AP / Crit / Hit / Haste / ArP
-- White DPS now uses your live weapon damage instead of dummy constants
+## What it does
 
-Still a scaffold:
-- The engine is still not the full Turtle warrior sim port yet.
-- Most warrior-specific talent logic and real rotation logic are not modeled yet.
+Snapshots your current character stats, weapon data, talents, and selected debuffs, then runs multiple simulated fights to estimate your average DPS.
+
+It is mainly built to help compare:
+
+* different talent setups
+* ability priorities
+* weapon choices
+* target counts
+* armor debuff combinations
+* Slam, Bloodthirst, Mortal Strike, Sweeping Strikes, Whirlwind, Execute, Heroic Strike, and Cleave usage
+
+## Current features
+
+* Simulates single-target and multi-target warrior damage
+* Reads your current:
+
+  * talents
+  * attack power
+  * crit
+  * hit
+  * haste
+  * armor penetration
+  * weapon speed and damage ranges
+  * weapon skill
+* Supports talent-gated abilities so abilities like **Bloodthirst**, **Mortal Strike**, and **Sweeping Strikes** only work when actually talented
+* Includes **Slam** timing logic with Turtle-specific cast-time handling
+* Lets you toggle common armor debuffs such as:
+
+  * Sunder Armor
+  * Faerie Fire
+  * Curse of Recklessness
+  * Expose Armor
+  * Homunculi
+* Shows a DPS breakdown by ability after the sim finishes
+
+## Notes
+
+* This is a custom Turtle WoW warrior simulator and may not match live gameplay perfectly in every edge case.
+* Results are only as accurate as the current talent detection, ability logic, and stat snapshot at the time of the sim.
+* The addon is intended as a fast comparison tool, not a perfect combat log reconstruction.
+
+## In short
+
+**Turtle Warrior Sim** is an in-game tool for estimating and comparing Warrior DPS setups on Turtle WoW without needing to leave the game.
