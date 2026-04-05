@@ -152,6 +152,20 @@ local function GetWeaponSkillsFromAPI(level, hasOffhand)
     return mhSkill, ohSkill
 end
 
+local function StripAPFromWeaponDamage(displayMin, displayMax, attackPower, speed)
+    local apComponent = ((attackPower or 0) / 14) * (speed or 0)
+    local baseMin = (displayMin or 0) - apComponent
+    local baseMax = (displayMax or 0) - apComponent
+    if baseMin < 0 then baseMin = 0 end
+    if baseMax < 0 then baseMax = 0 end
+    return baseMin, baseMax
+end
+
+local function ApplyAPToWeaponDamage(baseMin, baseMax, attackPower, speed)
+    local apComponent = ((attackPower or 0) / 14) * (speed or 0)
+    return (baseMin or 0) + apComponent, (baseMax or 0) + apComponent
+end
+
 function TWS:GetTargetArmorAfterDebuffs()
     local armor = self.db.sim.baseArmor or 4211
 
@@ -180,7 +194,8 @@ function TWS:BuildSnapshot()
     local baseSta, effectiveSta = UnitStat("player", 3)
 
     local apBase, apPos, apNeg = UnitAttackPower("player")
-    local attackPower = (apBase or 0) + (apPos or 0) + (apNeg or 0)
+    local liveAttackPower = (apBase or 0) + (apPos or 0) + (apNeg or 0)
+    local attackPower = liveAttackPower
 
     local apiCrit = SafeCall(GetCritChance) or 0
     local crit = GetCritFromBCS(apiCrit)
@@ -205,6 +220,7 @@ function TWS:BuildSnapshot()
     local haste = 0
     local armorPen = 0
     local hit = 0
+    local theomodeEnabled = self.db.sim.useTheomode == 1
 
     if BCS then
         if type(BCS.GetHaste) == "function" then
@@ -221,10 +237,28 @@ function TWS:BuildSnapshot()
         end
     end
 
+    if theomodeEnabled then
+        attackPower = attackPower + 929
+        crit = crit + 3
+        haste = haste + 32
+    end
+
     local castSpeed = 1 + ((haste or 0) / 100)
-    if BCS and type(BCS.GetCastSpeed) == "function" then
+    if (not theomodeEnabled) and BCS and type(BCS.GetCastSpeed) == "function" then
         local ok, value = pcall(function() return BCS:GetCastSpeed() end)
         if ok and value and value > 0 then castSpeed = value end
+    end
+
+    local mhBaseMin, mhBaseMax = StripAPFromWeaponDamage(minDmg or 0, maxDmg or 0, liveAttackPower, mhSpeed or 0)
+    local ohBaseMin, ohBaseMax = 0, 0
+    if hasOffhand == 1 then
+        ohBaseMin, ohBaseMax = StripAPFromWeaponDamage(minOff or 0, maxOff or 0, liveAttackPower, ohSpeed or 0)
+    end
+
+    local mhSimMin, mhSimMax = ApplyAPToWeaponDamage(mhBaseMin, mhBaseMax, attackPower, mhSpeed or 0)
+    local ohSimMin, ohSimMax = 0, 0
+    if hasOffhand == 1 then
+        ohSimMin, ohSimMax = ApplyAPToWeaponDamage(ohBaseMin, ohBaseMax, attackPower, ohSpeed or 0)
     end
 
     local t1, t2, t3 = GetTalentPoints()
@@ -255,6 +289,10 @@ function TWS:BuildSnapshot()
             slamBaseCastTime = slamBaseCastTime,
             slamCastTime = slamCastTime,
             armorPen = armorPen,
+            theomode = theomodeEnabled,
+            windfury = theomodeEnabled,
+            windfuryChance = theomodeEnabled and 20 or 0,
+            windfuryBonusAP = theomodeEnabled and 315 or 0,
         },
         talents = {
             tab1 = t1,
@@ -267,16 +305,20 @@ function TWS:BuildSnapshot()
                 link = mhLink,
                 name = GetItemNameSafe(mhLink),
                 speed = mhSpeed or 0,
-                min = minDmg or 0,
-                max = maxDmg or 0,
+                min = mhSimMin,
+                max = mhSimMax,
+                baseMin = mhBaseMin,
+                baseMax = mhBaseMax,
                 skill = mhSkill,
             },
             oh = {
                 link = ohLink,
                 name = GetItemNameSafe(ohLink),
                 speed = hasOffhand == 1 and (ohSpeed or 0) or 0,
-                min = hasOffhand == 1 and (minOff or 0) or 0,
-                max = hasOffhand == 1 and (maxOff or 0) or 0,
+                min = hasOffhand == 1 and ohSimMin or 0,
+                max = hasOffhand == 1 and ohSimMax or 0,
+                baseMin = hasOffhand == 1 and ohBaseMin or 0,
+                baseMax = hasOffhand == 1 and ohBaseMax or 0,
                 enabled = hasOffhand,
                 skill = ohSkill,
             },
