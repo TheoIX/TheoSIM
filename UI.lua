@@ -176,6 +176,7 @@ function TWS:CreateMainWindow()
     local width = 560
     local height = 520
     self.db.sim.slamMainCd = self.db.sim.slamMainCd or 0
+    self.db.sim.useTheomode = self.db.sim.useTheomode or 0
     self.db.window.width = width
     self.db.window.height = height
 
@@ -206,7 +207,7 @@ function TWS:CreateMainWindow()
     f:Hide()
 
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    title:SetPoint("TOP", f, "TOP", 0, -12)
+    title:SetPoint("TOP", f, "TOP", 0, -20)
     title:SetText("TheoSIM")
 
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
@@ -346,12 +347,22 @@ function TWS:CreateMainWindow()
         )
     end
 
+    f.theomodeButton = MakeIconToggle(
+        f,
+        debuffsX,
+        topY - 50 - (table.getn(debuffs) * 26),
+        "Theomode",
+        "Interface\\Icons\\Temp",
+        self.db.sim.useTheomode,
+        function(v) TWS.db.sim.useTheomode = v end
+    )
+
     local divider = f:CreateTexture(nil, "ARTWORK")
     divider:SetTexture("Interface\\Buttons\\WHITE8X8")
     divider:SetVertexColor(0.35, 0.35, 0.35, 0.8)
     divider:SetHeight(1)
     divider:SetWidth(width - 30)
-    divider:SetPoint("TOP", f, "TOP", 0, -370)
+    divider:SetPoint("TOP", f, "TOP", 0, -360)
 
     local avgLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     avgLabel:SetPoint("TOP", divider, "BOTTOM", 0, -26)
@@ -366,14 +377,14 @@ function TWS:CreateMainWindow()
     minmaxValue:SetText("Min / Max: 0.0 / 0.0")
 
     local leftResults = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    leftResults:SetPoint("TOPRIGHT", avgValue, "TOPLEFT", 20, 35)
+    leftResults:SetPoint("TOPRIGHT", avgValue, "TOPLEFT", 20, 40)
     leftResults:SetWidth(170)
     leftResults:SetJustifyH("LEFT")
     leftResults:SetJustifyV("TOP")
     leftResults:SetText("")
 
     local rightResults = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    rightResults:SetPoint("TOPLEFT", avgValue, "TOPRIGHT", 60, 35)
+    rightResults:SetPoint("TOPLEFT", avgValue, "TOPRIGHT", 60, 50)
     rightResults:SetWidth(190)
     rightResults:SetJustifyH("LEFT")
     rightResults:SetJustifyV("TOP")
@@ -411,7 +422,8 @@ function TWS:UpdateResultsUI(snapshot, result)
     leftText = leftText .. string.format("Execute DPS: %.1f\n", breakdown.execute or 0)
     leftText = leftText .. string.format("Slam DPS: %.1f\n", breakdown.slam or 0)
     leftText = leftText .. string.format("Heroic Strike DPS: %.1f\n", breakdown.heroicstrike or 0)
-    leftText = leftText .. string.format("Cleave DPS: %.1f", breakdown.cleave or 0)
+    leftText = leftText .. string.format("Cleave DPS: %.1f\n", breakdown.cleave or 0)
+    leftText = leftText .. string.format("Windfury DPS: %.1f", breakdown.windfury or 0)
 
     local slamCastDisplay = snapshot.stats and snapshot.stats.slamCastTime or 0
     if (not slamCastDisplay or slamCastDisplay <= 0) and snapshot.stats then
@@ -427,6 +439,8 @@ function TWS:UpdateResultsUI(snapshot, result)
 
     local rightText = ""
     rightText = rightText .. string.format("Talents: %d/%d/%d\n", snapshot.talents.tab1 or 0, snapshot.talents.tab2 or 0, snapshot.talents.tab3 or 0)
+    rightText = rightText .. string.format("Theomode: %s\n", (snapshot.stats.theomode == true or snapshot.stats.theomode == 1) and "ON" or "OFF")
+    rightText = rightText .. string.format("Windfury: %s\n", (snapshot.stats.windfury == true or snapshot.stats.windfury == 1) and "ON" or "OFF")
     rightText = rightText .. string.format("Crit: %d\n", snapshot.stats.crit or 0)
     rightText = rightText .. string.format("AP: %d\n", snapshot.stats.attackPower or 0)
     rightText = rightText .. string.format("Hit: %d\n", snapshot.stats.hit or 0)
@@ -450,3 +464,4 @@ function TWS:UpdateResultsUI(snapshot, result)
         self.mainWindow.rightResults:SetText(rightText)
     end
 end
+
