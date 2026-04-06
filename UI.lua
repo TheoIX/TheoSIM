@@ -176,7 +176,10 @@ function TWS:CreateMainWindow()
     local width = 560
     local height = 520
     self.db.sim.slamMainCd = self.db.sim.slamMainCd or 0
-    self.db.sim.useTheomode = self.db.sim.useTheomode or 0
+    self.db.sim.useRaidBuffs = self.db.sim.useRaidBuffs or 0
+    self.db.sim.useDWEnrage = self.db.sim.useDWEnrage or 0
+    self.db.sim.useFlurryBuff = self.db.sim.useFlurryBuff or 0
+    self.db.sim.useTheomodeHaste = self.db.sim.useTheomodeHaste or 0
     self.db.window.width = width
     self.db.window.height = height
 
@@ -346,15 +349,44 @@ function TWS:CreateMainWindow()
             function(v) TWS.db.sim[entry.key] = v end
         )
     end
+    f.raidBuffsButton = MakeIconToggle(
+        f,
+        debuffsX,
+        topY - 50 - (table.getn(debuffs) * 26),
+        "Raid Buffs",
+        "Interface\\Icons\\INV_Misc_Head_Dragon_01",
+        self.db.sim.useRaidBuffs,
+        function(v) TWS.db.sim.useRaidBuffs = v end
+    )
+
+    f.dwEnrageButton = MakeIconToggle(
+        f,
+        debuffsX,
+        topY - 76 - (table.getn(debuffs) * 26),
+        "DW+enrage",
+        "Interface\\Icons\\Spell_Shadow_DeathPact",
+        self.db.sim.useDWEnrage,
+        function(v) TWS.db.sim.useDWEnrage = v end
+    )
+
+    f.flurryBuffButton = MakeIconToggle(
+        f,
+        debuffsX,
+        topY - 102 - (table.getn(debuffs) * 26),
+        "Flurry",
+        "Interface\\Icons\\Ability_GhoulFrenzy",
+        self.db.sim.useFlurryBuff,
+        function(v) TWS.db.sim.useFlurryBuff = v end
+    )
 
     f.theomodeButton = MakeIconToggle(
         f,
         debuffsX,
-        topY - 50 - (table.getn(debuffs) * 26),
+        topY - 128 - (table.getn(debuffs) * 26),
         "Theomode",
         "Interface\\Icons\\Temp",
-        self.db.sim.useTheomode,
-        function(v) TWS.db.sim.useTheomode = v end
+        self.db.sim.useTheomodeHaste,
+        function(v) TWS.db.sim.useTheomodeHaste = v end
     )
 
     local divider = f:CreateTexture(nil, "ARTWORK")
@@ -376,6 +408,13 @@ function TWS:CreateMainWindow()
     minmaxValue:SetPoint("TOP", avgValue, "BOTTOM", 0, -6)
     minmaxValue:SetText("Min / Max: 0.0 / 0.0")
 
+    local weaponInfoValue = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    weaponInfoValue:SetPoint("TOP", minmaxValue, "BOTTOM", 0, -8)
+    weaponInfoValue:SetWidth(250)
+    weaponInfoValue:SetJustifyH("CENTER")
+    weaponInfoValue:SetJustifyV("TOP")
+    weaponInfoValue:SetText("")
+
     local leftResults = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     leftResults:SetPoint("TOPRIGHT", avgValue, "TOPLEFT", 20, 40)
     leftResults:SetWidth(170)
@@ -392,6 +431,7 @@ function TWS:CreateMainWindow()
 
     f.avgValue = avgValue
     f.minmaxValue = minmaxValue
+    f.weaponInfoValue = weaponInfoValue
     f.leftResults = leftResults
     f.rightResults = rightResults
     f:SetScript("OnShow", function() TWS:RefreshAbilityTalentGates() end)
@@ -437,31 +477,43 @@ function TWS:UpdateResultsUI(snapshot, result)
         slamCastDisplay = slamBaseCastTime / castSpeed
     end
 
+    local hasteMult = 1 + ((snapshot.stats and snapshot.stats.haste or 0) / 100)
+    if hasteMult <= 0 then hasteMult = 1 end
+
+    local mhDisplaySpeed = (snapshot.weapons.mh.speed or 0) / hasteMult
+    local weaponText = string.format("MH: %s\n%.2f speed / %.0f-%.0f / skill %d", snapshot.weapons.mh.name or "None", mhDisplaySpeed or 0, snapshot.weapons.mh.min or 0, snapshot.weapons.mh.max or 0, snapshot.weapons.mh.skill or 0)
+
+    if snapshot.weapons.oh.enabled == 1 then
+        local ohDisplaySpeed = (snapshot.weapons.oh.speed or 0) / hasteMult
+        weaponText = weaponText .. string.format("\nOH: %s\n%.2f speed / %.0f-%.0f / skill %d", snapshot.weapons.oh.name or "None", ohDisplaySpeed or 0, snapshot.weapons.oh.min or 0, snapshot.weapons.oh.max or 0, snapshot.weapons.oh.skill or 0)
+    else
+        weaponText = weaponText .. "\nOH: None"
+    end
+
     local rightText = ""
     rightText = rightText .. string.format("Talents: %d/%d/%d\n", snapshot.talents.tab1 or 0, snapshot.talents.tab2 or 0, snapshot.talents.tab3 or 0)
+    rightText = rightText .. string.format("Raid Buffs: %s\n", (snapshot.stats.raidBuffs == true or snapshot.stats.raidBuffs == 1) and "ON" or "OFF")
+    rightText = rightText .. string.format("DW+enrage: %s\n", (snapshot.stats.dwEnrage == true or snapshot.stats.dwEnrage == 1) and "ON" or "OFF")
+    rightText = rightText .. string.format("Flurry: %s\n", (snapshot.stats.flurryBuff == true or snapshot.stats.flurryBuff == 1) and "ON" or "OFF")
     rightText = rightText .. string.format("Theomode: %s\n", (snapshot.stats.theomode == true or snapshot.stats.theomode == 1) and "ON" or "OFF")
     rightText = rightText .. string.format("Windfury: %s\n", (snapshot.stats.windfury == true or snapshot.stats.windfury == 1) and "ON" or "OFF")
     rightText = rightText .. string.format("Crit: %d\n", snapshot.stats.crit or 0)
     rightText = rightText .. string.format("AP: %d\n", snapshot.stats.attackPower or 0)
     rightText = rightText .. string.format("Hit: %d\n", snapshot.stats.hit or 0)
     rightText = rightText .. string.format("Haste: %d\n", snapshot.stats.haste or 0)
+    rightText = rightText .. string.format("Damage Mod: x%.2f\n", snapshot.stats.damageMultiplier or 1)
     rightText = rightText .. string.format("Slam Cast: %.2fs\n", slamCastDisplay or 0)
     rightText = rightText .. string.format("ArP: %d\n", snapshot.stats.armorPen or 0)
     rightText = rightText .. string.format("Armor After Debuffs: %d\n", result.targetArmor or 0)
-    rightText = rightText .. string.format("MH: %s\n", snapshot.weapons.mh.name or "None")
-    rightText = rightText .. string.format("  %.1f speed / %.0f-%.0f / skill %d\n", snapshot.weapons.mh.speed or 0, snapshot.weapons.mh.min or 0, snapshot.weapons.mh.max or 0, snapshot.weapons.mh.skill or 0)
-    if snapshot.weapons.oh.enabled == 1 then
-        rightText = rightText .. string.format("OH: %s\n", snapshot.weapons.oh.name or "None")
-        rightText = rightText .. string.format("  %.1f speed / %.0f-%.0f / skill %d", snapshot.weapons.oh.speed or 0, snapshot.weapons.oh.min or 0, snapshot.weapons.oh.max or 0, snapshot.weapons.oh.skill or 0)
-    else
-        rightText = rightText .. "OH: None"
-    end
-
     if self.mainWindow.leftResults then
         self.mainWindow.leftResults:SetText(leftText)
     end
     if self.mainWindow.rightResults then
         self.mainWindow.rightResults:SetText(rightText)
     end
+    if self.mainWindow.weaponInfoValue then
+        self.mainWindow.weaponInfoValue:SetText(weaponText)
+    end
 end
+
 
