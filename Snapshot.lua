@@ -220,7 +220,10 @@ function TWS:BuildSnapshot()
     local haste = 0
     local armorPen = 0
     local hit = 0
-    local theomodeEnabled = self.db.sim.useTheomode == 1
+    local raidBuffsEnabled = self.db.sim.useRaidBuffs == 1
+    local dwEnrageEnabled = self.db.sim.useDWEnrage == 1
+    local flurryBuffEnabled = self.db.sim.useFlurryBuff == 1
+    local theomodeEnabled = self.db.sim.useTheomodeHaste == 1
 
     if BCS then
         if type(BCS.GetHaste) == "function" then
@@ -237,14 +240,21 @@ function TWS:BuildSnapshot()
         end
     end
 
-    if theomodeEnabled then
+    if raidBuffsEnabled then
         attackPower = attackPower + 929
-        crit = crit + 3
-        haste = haste + 32
+        crit = crit + 12
+        haste = haste + 2
+    end
+    if flurryBuffEnabled then
+        haste = haste + 30
+    end
+    if theomodeEnabled then
+        haste = haste + 35
+        attackPower = attackPower + 400
     end
 
     local castSpeed = 1 + ((haste or 0) / 100)
-    if (not theomodeEnabled) and BCS and type(BCS.GetCastSpeed) == "function" then
+    if (not raidBuffsEnabled) and (not flurryBuffEnabled) and (not theomodeEnabled) and BCS and type(BCS.GetCastSpeed) == "function" then
         local ok, value = pcall(function() return BCS:GetCastSpeed() end)
         if ok and value and value > 0 then castSpeed = value end
     end
@@ -289,10 +299,14 @@ function TWS:BuildSnapshot()
             slamBaseCastTime = slamBaseCastTime,
             slamCastTime = slamCastTime,
             armorPen = armorPen,
+            raidBuffs = raidBuffsEnabled,
+            dwEnrage = dwEnrageEnabled,
+            flurryBuff = flurryBuffEnabled,
             theomode = theomodeEnabled,
-            windfury = theomodeEnabled,
-            windfuryChance = theomodeEnabled and 20 or 0,
-            windfuryBonusAP = theomodeEnabled and 315 or 0,
+            damageMultiplier = dwEnrageEnabled and 1.4 or 1,
+            windfury = raidBuffsEnabled,
+            windfuryChance = raidBuffsEnabled and 20 or 0,
+            windfuryBonusAP = raidBuffsEnabled and 315 or 0,
         },
         talents = {
             tab1 = t1,
