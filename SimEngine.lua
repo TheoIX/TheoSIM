@@ -193,9 +193,10 @@ end
 function TWS:GetArmorAdjustedDamage(snapshot, rawDamage)
     local armorPen = snapshot.stats.armorPen or 0
     local targetArmor = (snapshot.target.debuffedArmor or 0) - armorPen
+    local damageMultiplier = snapshot.stats.damageMultiplier or 1
     if targetArmor < 0 then targetArmor = 0 end
     local reduction = self:EstimateArmorReduction(snapshot.level, targetArmor)
-    return rawDamage * (1 - reduction)
+    return rawDamage * (1 - reduction) * damageMultiplier
 end
 
 function TWS:GetAutoAttackDamage(snapshot, hand, result)
